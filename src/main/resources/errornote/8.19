@@ -1,0 +1,40 @@
+@Controller
+public class EmployeeController {
+
+    @Autowired()
+    EmployeeService employeeService;
+
+    /**
+     * 查询员工数据（分页）
+     *
+     * @return
+     */
+    @RequestMapping("/emps")
+    public String getEmp(@RequestParam(value = "pageNo", defaultValue = "1") Integer pageNo, Model model) {
+        //引入PageHelper分页插件
+        //在查询之前需要调用,传入页码和每页数据
+        PageHelper.startPage(pageNo, 5);
+        //再startPage后面紧跟的查询就是分页查询
+        List<Employee> emps = employeeService.getALL();
+        //使用pageinfo包装查询结果,只需要将pageinfo交给页面
+        PageInfo page = new PageInfo(emps, 5);
+        model.addAttribute("pageInfo", page);
+        return "list";
+    }
+在调用Controller方法时发现IOC容器无法注入employeeService，系统抛出NoSuchBeanDefinitionException: No qualifying bean of type 'com.atguigu.crud.service.EmployeeService' available: expected at least 1 bean which qualifies as autowire candidate. Dependency annotations: {@org.springframework.beans.factory.annotation.Autowired(required=true)}
+错误。在网上寻找方法发现都是从注解是否标注，配置文件是否书写正确来解决这一异常的。这些问题我我都确认过很多次，发现都无问题。
+直到看到有人说在web.xml文件中添加spring配置时要配置ContextLoaderListener监听器。
+ContextLoaderListener的作用就是启动Web容器时，自动装配ApplicationContext.xml的配置信息。
+ContextLoaderListener继承自ContextLoader，实现的是ServletContextListener接口。在web.xml配置这个监听器，启动容器时，就会默认执行它实现的方法。
+ContextLoaderListener可以指定在Web应用程序启动时载入Ioc容器，正是通过ContextLoader来实现的，ContextLoader来完成实际的WebApplicationContext，也就是Ioc容器的初始化工作。
+如果没有显式声明，则 系统默认 在WEB-INF/applicationContext.xml。完整代码如下：
+  <context-param>
+    <param-name>contextConfigLocation</param-name>
+    <param-value>classpath:applicationContext.xml</param-value>
+  </context-param>
+  <listener>
+    <listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
+  </listener>
+
+  但我添加该监听器后，系统又抛出ContextLoaderListener java.lang.AbstractMethodError: Method com/mchange/v2/c3p0/impl/NewProxyResultSet.isClosed()Z is abstract异常
+  网上的解决方法是使用较新的C3P0版本，但是这一方法无法解决我的问题。于是我将C3P0数据源替换为druid数据源，最后成功解决问题。
